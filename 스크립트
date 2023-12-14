@@ -1,0 +1,346 @@
+BackgroundMusic 스크립트
+------------------------------------------------------------------------------------------------------
+using UnityEngine;
+
+public class BackgroundMusic : MonoBehaviour
+{
+    private AudioSource audioSource;
+
+    void Start()
+    {
+        audioSource = GetComponent<AudioSource>();
+        audioSource.Play(); // 배경음악 재생 시작
+    }
+
+    void Update()
+    {
+        // GameManager의 IsSoundOn 상태에 따라 배경음악 제어
+        if (GameManager.IsSoundOn && !audioSource.isPlaying)
+        {
+            audioSource.Play(); // 사운드가 켜져 있고, 음악이 재생되지 않고 있다면 재생
+        }
+        else if (!GameManager.IsSoundOn && audioSource.isPlaying)
+        {
+            audioSource.Stop(); // 사운드가 꺼져 있고, 음악이 재생되고 있다면 정지
+        }
+    }
+
+    public void StopMusic()
+    {
+        audioSource.Stop(); // 배경음악 정지
+    }
+}
+------------------------------------------------------------------------------------------------------
+1. 배경음악을 넣기 위한 스크립트로 게임 시작 시 배경음악이 재생되도록 만들어줌
+2. 설정 창에서 배경음악을 off로 설정하면 배경음악을 중지시킴
+------------------------------------------------------------------------------------------------------
+using UnityEngine;
+using UnityEngine.UI;
+
+public class DeathCounterUI : MonoBehaviour
+{
+    public Text deathText;
+
+    void Update()
+    {
+        deathText.text = "Deaths: " + GameManager.deathCount.ToString();
+    }
+}
+------------------------------------------------------------------------------------------------------
+1. 죽은 횟수를 카운트 하는 스크립트
+------------------------------------------------------------------------------------------------------
+public static class GameManager
+{
+    public static int deathCount = 0; // 죽음 횟수를 저장하는 정적 변수
+    public static bool IsSoundOn = true; // 사운드 On/Off 상태를 저장하는 정적 변수
+
+    public static void PlayerDied()
+    {
+        deathCount++; // 죽음 횟수 증가
+    }
+
+    public static void ResetDeathCount()
+    {
+        deathCount = 0;
+    }
+
+    public static void ToggleSound()
+    {
+        IsSoundOn = !IsSoundOn;
+    }
+}
+------------------------------------------------------------------------------------------------------
+1. 캐릭터가 죽은 횟수를 저장하고 초기화 하는 스크립트
+2. 사운드 on/off 상태를 저장하고 변경하는 스크립트
+------------------------------------------------------------------------------------------------------
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+
+public class LevelSelector : MonoBehaviour
+{
+    public Text levelDisplay;           // 현재 단계 표시 UI
+    public Image levelImage;            // 레벨에 따라 바뀔 이미지를 표시하는 UI
+    public Sprite[] levelImages;        // 레벨 이미지 배열
+
+    private int currentLevel = 1;
+
+    public void NextLevel()
+    {
+        currentLevel = Mathf.Clamp(currentLevel + 1, 1, 3);
+        UpdateLevelDisplay();
+    }
+
+    public void PreviousLevel()
+    {
+        currentLevel = Mathf.Clamp(currentLevel - 1, 1, 3);
+        UpdateLevelDisplay();
+    }
+
+    public void StartGame()
+    {
+        SceneManager.LoadScene($"Level{currentLevel}");
+    }
+
+    private void UpdateLevelDisplay()
+    {
+        levelDisplay.text = $"레벨 {currentLevel}";
+        levelImage.sprite = levelImages[currentLevel - 1];  // 이미지 배열은 0부터 시작하므로
+    }
+
+    private void Start()
+    {
+        UpdateLevelDisplay();
+    }
+}
+------------------------------------------------------------------------------------------------------
+1. 플레이어가 레벨을 선택할 수 있는 스크립트
+2. 레벨에 따라 레벨 이미지가 바뀌는 스크립트
+3. 좌우 클릭으로 레벨을 선택할 수 있는 스크립트
+------------------------------------------------------------------------------------------------------
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public class MainMenuLoader : MonoBehaviour
+{
+    public string mainMenuSceneName = "MainMenu"; // 메인 메뉴 씬의 이름
+
+    public void LoadMainMenu()
+    {
+        SceneManager.LoadScene(mainMenuSceneName);
+        GameManager.ResetDeathCount(); // 죽음 횟수 초기화
+    }
+}
+------------------------------------------------------------------------------------------------------
+1. 씬을 이동할 수 있는 스크립트
+2. 메인 화면으로 나가면 죽음 횟수를 초기화시킴
+------------------------------------------------------------------------------------------------------
+using UnityEngine;
+
+public class MoveLeft : MonoBehaviour
+{
+    public float speed = 5f;
+
+    void Update()
+    {
+        transform.Translate(-speed * Time.deltaTime, 0, 0);
+    }
+
+    // speed를 0으로 설정하는 public 메서드
+    public void StopMoving()
+    {
+        speed = 0;
+    }
+}
+------------------------------------------------------------------------------------------------------
+1. 오브젝트를 왼쪽으로 이동시키는 스크립트
+------------------------------------------------------------------------------------------------------
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public class Obstacle : MonoBehaviour
+{
+    private AudioSource audioSource;
+    public GameObject[] targetObjects;
+
+    private void Awake()
+    {
+        audioSource = GetComponent<AudioSource>();
+    }
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Player"))
+        {
+            GameManager.PlayerDied(); // 죽음 횟수 증가
+
+            // 효과음 재생 (IsSoundOn이 true일 때만)
+            if (GameManager.IsSoundOn)
+            {
+                audioSource.Play();
+            }
+
+            // 플레이어 캐릭터를 안 보이게 만듦
+            Renderer playerRenderer = collision.gameObject.GetComponent<Renderer>();
+            if (playerRenderer != null)
+            {
+                playerRenderer.enabled = false;
+            }
+
+            // 지정된 모든 오브젝트에서 MoveLeft 스크립트를 찾아 멈추게 함
+            foreach (var targetObject in targetObjects)
+            {
+                if (targetObject != null)
+                {
+                    MoveLeft moveLeftScript = targetObject.GetComponent<MoveLeft>();
+                    if (moveLeftScript != null)
+                    {
+                        moveLeftScript.StopMoving();
+                    }
+                }
+            }
+
+            // 1초 후에 RestartScene 함수를 호출
+            Invoke("RestartScene", 1.0f);
+        }
+    }
+
+    private void RestartScene()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex); // 현재 씬을 다시 로드
+    }
+}
+------------------------------------------------------------------------------------------------------
+1. 장애물을 설정하는 스크립트로, 플레이어 태그를 닿은 오브젝트랑 접촉하면 죽음 횟수를 증가시킴
+2. 또한, 플레이어 캐릭터를 안보이게 만듦
+3. 사운드를 켜놓은 상태에서만 효과음을 재생할 수 있도록 만듦
+4. 플레이어 태그에 닿으면 moveleft 스크립트를 멈춤
+------------------------------------------------------------------------------------------------------
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public class PlayerJump : MonoBehaviour
+{
+    public float jumpForce = 10f; 
+    private bool isGrounded = true; 
+    private Rigidbody2D rb;
+    private Quaternion startRotation;
+    private Quaternion endRotation;
+    private float rotationTime = 0.3f; 
+    private float currentRotationTime = 0;
+    private bool isRotating = false;
+    public GameObject gameClearImage; // Inspector에서 할당
+
+    private void Start()
+    {
+        rb = GetComponent<Rigidbody2D>();
+    }
+
+    private void Update()
+    {
+        if (Input.GetMouseButtonDown(0) && isGrounded && !isRotating)
+        {
+            Jump();
+        }
+
+        if (isRotating)
+        {
+            currentRotationTime += Time.deltaTime;
+            float fraction = currentRotationTime / rotationTime;
+
+            transform.rotation = Quaternion.Slerp(startRotation, endRotation, fraction);
+
+            if (fraction >= 1)
+            {
+                isRotating = false;
+            }
+        }
+
+        // 플레이어의 y좌표가 -4.6 이하인 경우 죽음 횟수 증가 및 현재 씬 재시작
+        if (transform.position.y <= -4.6f)
+        {
+            GameManager.PlayerDied(); // 죽음 횟수 증가
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        }
+    }
+
+    private void Jump()
+    {
+        rb.velocity = new Vector2(0, jumpForce);
+        isGrounded = false;
+
+        startRotation = transform.rotation;
+        endRotation = Quaternion.Euler(0, 0, transform.rotation.eulerAngles.z - 90); 
+        currentRotationTime = 0;
+        isRotating = true;
+    }
+
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Ground")) 
+        {
+            isGrounded = true;
+        }
+
+        if (collision.gameObject.CompareTag("Finish"))
+        {
+            GameClear();
+        }
+    }
+
+    private void GameClear()
+    {
+        gameClearImage.SetActive(true); // 게임 클리어 이미지 표시
+        // 추가적인 게임 클리어 로직 (예: 게임 멈추기, 점수 계산 등)
+        GameManager.ResetDeathCount(); // 죽음 횟수 초기화
+    }
+}
+------------------------------------------------------------------------------------------------------
+1. 화면을 클릭하면 플레이어가 점프와 회전함
+2. ground 태그에 닿으면 바닥인 것을 인지함
+3. finish 태그에 닿으면 게임클리어 화면 출력함
+------------------------------------------------------------------------------------------------------
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public class SceneChanger : MonoBehaviour
+{
+    public void LoadNextScene()
+    {
+        // 현재 씬의 인덱스를 가져옵니다.
+        int currentSceneIndex = SceneManager.GetActiveScene().buildIndex;
+
+        // 다음 씬의 인덱스를 계산하고, 해당 씬을 로드합니다.
+        int nextSceneIndex = (currentSceneIndex + 1) % SceneManager.sceneCountInBuildSettings;
+        SceneManager.LoadScene(nextSceneIndex);
+    }
+}
+------------------------------------------------------------------------------------------------------
+1. 즉시 씬을 변경하는 스크립트로 레벨을 선택할 때 사용함
+------------------------------------------------------------------------------------------------------
+using UnityEngine;
+using UnityEngine.UI; // UI 컴포넌트를 사용하기 위해 필요
+
+public class SoundToggleButton : MonoBehaviour
+{
+    public Text soundStatusText; // UI 텍스트 컴포넌트 참조
+
+    void Start()
+    {
+        UpdateSoundStatusText(); // 초기 상태 업데이트
+    }
+
+    public void OnButtonClicked()
+    {
+        GameManager.ToggleSound();
+        UpdateSoundStatusText(); // 상태 변경 후 텍스트 업데이트
+    }
+
+    void UpdateSoundStatusText()
+    {
+        soundStatusText.text = GameManager.IsSoundOn ? "On" : "Off";
+    }
+}
+------------------------------------------------------------------------------------------------------
+1. 사운드를 조절할 수 있는스크립트로 버튼을 누르면 on/off가 됨됨  
+------------------------------------------------------------------------------------------------------
